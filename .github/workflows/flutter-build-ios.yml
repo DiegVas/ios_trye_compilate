@@ -2,25 +2,20 @@ name: Flutter iOS Build
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [main]
+  workflow_dispatch: # Permite ejecución manual para ahorrar minutos
 
 jobs:
   build-ios:
     name: 🍎 Flutter iOS Build
-    runs-on: macos-latest
+    runs-on: macos-14 # Versión estable para Xcode 15.4/16
 
     steps:
-      # ── 1. Checkout ─────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Instalar Flutter ─────────────────────────────────────────────────
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -28,109 +23,37 @@ jobs:
           channel: "stable"
           cache: true
 
-      - name: Flutter version info
-        run: flutter --version
-
-      # ── 3. Instalar dependencias Dart/Flutter ───────────────────────────────
       - name: Get Flutter packages
         run: flutter pub get
 
-      # ── 4. Regenerar carpeta ios ─────────────────────────────────────────────
-      #   Se elimina siempre (viene incompleta de Windows) y se regenera.
-      #   flutter create solo genera la estructura de carpetas, NO el Podfile.
-      #   El Podfile lo genera Flutter internamente al hacer el build.
-      - name: Generate iOS folder
+      - name: Reconstruct iOS Folder
         run: |
-          echo "🗑️  Eliminando carpeta ios incompleta (si existe)..."
+          echo "🗑️ Limpiando carpeta ios..."
           rm -rf ios
-
-          echo "📂 Generando estructura ios con flutter create..."
           flutter create --platforms ios .
+          echo "✅ Carpeta ios regenerada."
 
-          echo "✅ Estructura ios generada:"
-          ls -la ios/
-
-      # ── 5. Seleccionar Xcode ─────────────────────────────────────────────────
-      #   Se hace ANTES del build para que Flutter detecte bien el toolchain.
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      # ── 6. Configurar Ruby + CocoaPods ──────────────────────────────────────
-      #   CocoaPods debe estar disponible ANTES de flutter build ios,
-      #   ya que Flutter corre pod install internamente durante el build.
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.2"
-          bundler-cache: true
-
-      - name: Install CocoaPods
-        run: gem install cocoapods
-
-      # ── 7. Caché de CocoaPods ───────────────────────────────────────────────
+      # Cachear los Pods acelera el build significativamente
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
-          path: ~/.cocoapods
-          key: pods-${{ hashFiles('pubspec.lock') }}
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
-            pods-
+            ${{ runner.os }}-pods-
 
-      # ── 8. Build iOS ─────────────────────────────────────────────────────────
-      #   flutter build ios genera el Podfile, corre pod install y compila.
-      #   Todo en un solo comando, sin necesidad de pod install manual.
       - name: Build iOS (no codesign)
         run: |
-          flutter build ios \
-            --release \
-            --no-codesign \
-            --verbose
+          # Flutter detectará que falta el Podfile y ejecutará 'pod install' solo
+          flutter build ios --release --no-codesign --verbose
 
-      # ── 9. (Opcional) Build firmado para App Store ────────────────────────────
-      #        Descomenta cuando tengas certificados en GitHub Secrets.
-      #
-      # - name: Install Apple certificates
-      #   uses: apple-actions/import-codesign-certs@v3
-      #   with:
-      #     p12-file-base64: ${{ secrets.APPLE_P12_BASE64 }}
-      #     p12-password: ${{ secrets.APPLE_P12_PASSWORD }}
-      #
-      # - name: Install provisioning profile
-      #   uses: apple-actions/download-provisioning-profiles@v3
-      #   with:
-      #     bundle-id: com.tuempresa.tuapp
-      #     issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
-      #     api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
-      #     api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
-      #
-      # - name: Build signed IPA
-      #   run: |
-      #     flutter build ipa \
-      #       --release \
-      #       --export-options-plist=ios/ExportOptions.plist
-
-      # ── 10. Subir artefactos ──────────────────────────────────────────────────
       - name: Upload iOS build artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-ios-${{ github.sha }}
-          path: |
-            build/ios/iphoneos/
-            build/ios/ipa/
-          if-no-files-found: warn
-          retention-days: 14
-
-      # ── 11. Resumen del build ─────────────────────────────────────────────────
-      - name: Build summary
-        if: always()
-        run: |
-          echo "## 🍎 Flutter iOS Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rama | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runner | macos-latest |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flutter | 3.41.6 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Codesign | ❌ (sin firma) |" >> $GITHUB_STEP_SUMMARY
+          name: flutter-ios-no-codesign
+          path: build/ios/iphoneos/
+          retention-days: 7
