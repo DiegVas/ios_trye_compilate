@@ -34,7 +34,7 @@ jobs:
           echo "✅ Carpeta ios regenerada."
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
       # Cachear los Pods acelera el build significativamente
       - name: Cache CocoaPods
