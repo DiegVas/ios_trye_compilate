@@ -24,7 +24,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.41.6" # ✅ Corregido: requiere Dart ^3.10.8
+          flutter-version: "3.41.6" # ✅ Dart ^3.10.8 requerido por pubspec
           channel: "stable"
           cache: true
 
@@ -35,20 +35,27 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
-      # ── 4. Regenerar carpeta ios (clave: el proyecto venía de Windows) ──────
-      #       En Windows flutter no genera ios/. Este paso la crea en el runner.
+      # ── 4. Regenerar carpeta ios ─────────────────────────────────────────────
+      #   El proyecto fue creado en Windows, que no genera ios/.
+      #   Se elimina siempre (puede estar incompleta) y se regenera
+      #   con flutter create para garantizar un Podfile válido.
       - name: Generate iOS folder
         run: |
-          echo "🔍 Verificando carpeta ios..."
+          echo "🗑️  Eliminando carpeta ios incompleta (si existe)..."
+          rm -rf ios
 
-          if [ ! -d "ios" ] || [ -z "$(ls -A ios 2>/dev/null)" ]; then
-            echo "📂 Carpeta ios vacía o inexistente — creando con flutter create..."
-            # --platforms ios regenera SOLO la carpeta ios sin tocar el resto
-            flutter create --platforms ios .
-            echo "✅ Carpeta ios generada correctamente"
-          else
-            echo "✅ Carpeta ios encontrada"
+          echo "📂 Generando carpeta ios con flutter create..."
+          flutter create --platforms ios .
+
+          echo "✅ Carpeta ios generada. Contenido:"
+          ls -la ios/
+
+          echo "📄 Verificando Podfile..."
+          if [ ! -f "ios/Podfile" ]; then
+            echo "❌ ERROR: Podfile no encontrado tras flutter create"
+            exit 1
           fi
+          echo "✅ Podfile encontrado"
 
       # ── 5. Configurar Ruby + CocoaPods ──────────────────────────────────────
       - name: Setup Ruby
@@ -81,7 +88,7 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      # ── 9. Build iOS — Simulador (sin certificados de firma) ─────────────────
+      # ── 9. Build iOS sin firma ───────────────────────────────────────────────
       - name: Build iOS (no codesign)
         run: |
           flutter build ios \
@@ -89,26 +96,8 @@ jobs:
             --no-codesign \
             --verbose
 
-      # ── ALTERNATIVA: build directo con xcodebuild ────────────────────────────
-      # Descomenta si prefieres control fino sobre el scheme/workspace:
-      #
-      # - name: Build with xcodebuild
-      #   run: |
-      #     cd ios
-      #     xcodebuild \
-      #       -workspace Runner.xcworkspace \
-      #       -scheme Runner \
-      #       -configuration Release \
-      #       -destination 'generic/platform=iOS Simulator' \
-      #       -derivedDataPath build \
-      #       CODE_SIGN_IDENTITY="" \
-      #       CODE_SIGNING_REQUIRED=NO \
-      #       CODE_SIGNING_ALLOWED=NO \
-      #       | xcpretty --color --simple
-
-      # ── 10. (Opcional) Archivar .ipa con certificados ────────────────────────
-      #        Requiere secrets configurados en tu repo de GitHub.
-      #        Descomenta cuando tengas firma configurada.
+      # ── 10. (Opcional) Build firmado para App Store ───────────────────────────
+      #        Descomenta cuando tengas certificados en GitHub Secrets.
       #
       # - name: Install Apple certificates
       #   uses: apple-actions/import-codesign-certs@v3
@@ -119,7 +108,7 @@ jobs:
       # - name: Install provisioning profile
       #   uses: apple-actions/download-provisioning-profiles@v3
       #   with:
-      #     bundle-id: com.tuempresa.tuapp   # ← Cambia a tu bundle ID
+      #     bundle-id: com.tuempresa.tuapp
       #     issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
       #     api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
       #     api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
@@ -154,4 +143,4 @@ jobs:
           echo "| Rama | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Runner | macos-latest |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter | 3.41.6 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Codesign | ❌ (simulador) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Codesign | ❌ (sin firma) |" >> $GITHUB_STEP_SUMMARY
