@@ -24,7 +24,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.0" # ← Cambia a tu versión de Flutter
+          flutter-version: "3.41.6" # ✅ Corregido: requiere Dart ^3.10.8
           channel: "stable"
           cache: true
 
@@ -153,5 +153,5 @@ jobs:
           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Rama | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Runner | macos-latest |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flutter | 3.22.0 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Flutter | 3.41.6 |" >> $GITHUB_STEP_SUMMARY
           echo "| Codesign | ❌ (simulador) |" >> $GITHUB_STEP_SUMMARY
